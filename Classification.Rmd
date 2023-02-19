@@ -1,0 +1,298 @@
+---
+title: "Logistic Regression"
+author: "Naomi Zilber"
+date: "18 February 2023"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+### Overview
+
+Linear models for classifications, where the target variable is qualitative, create decision boundaries to separate the observations into regions in which most observations are of the same class, and each of these decision boundaries is a linear combination of X parameters.
+Some strengths of these linear models are that they have low variance, are fairly easy to implement and interpret, and some work better for smaller or larger data sets so you are able to choose a specific type of model that will work better given your data set.
+Some weaknesses are that they have high bias (which causes underfitting) due to the assumption that data follows a linear trend.
+
+The data set used in this notebook is from [this link.](https://www.kaggle.com/datasets/ahsan81/hotel-reservations-classification-dataset)
+
+### Load data
+
+Read in the data of hotel reservations
+```{r}
+df <- read.csv("Hotel_Reservations.csv", header=TRUE)
+str(df)
+```
+
+### Data cleaning
+
+Got rid of features that I don't think will affect the target value (booking status), and converted room_type_reserved, booking_status, and repeated_guest into factors.
+```{r}
+df <- df[,c(-1,-6,-7,-10,-11,-12,-13)]
+df$room_type_reserved <- as.factor(df$room_type_reserved)
+df$booking_status <- as.factor(df$booking_status)
+df$repeated_guest <- as.factor(df$repeated_guest)
+str(df)
+```
+
+### Handle missing values
+
+There are no NAs to handle in this data set
+```{r}
+sapply(df, function(x) sum(is.na(x)==TRUE))
+```
+
+### Divide into train and test data
+
+Divide the data to 80% train data and 20% test data
+```{r}
+set.seed(1234)
+i <- sample(1:nrow(df), 0.8*nrow(df), replace=FALSE)
+train <- df[i,]
+test <- df[-i,]
+```
+
+### Data exploration
+
+I looked at the first 4 rows using head() to get a peek into what my data looks like, and then used summary() to get an even better idea of the distribution of the data and to get more detailed statistics about it. I also found the average lead time to see how ahead of time people reserved rooms on average, and found the range of the room prices.
+```{r}
+head(train, n=4)
+summary(train)
+
+mean(train$lead_time)
+range(train$avg_price_per_room)
+```
+
+Generate the covariance and correlations for the quantitative data
+```{r}
+train_sub <- train[,c(-5,-7,-12)]
+
+cor(train_sub)
+pairs(train_sub)
+
+cov(train_sub)
+```
+From the cor(), I found that most of the correlations are quite weak. The strongest correlations in this data set seem to be between:
+
+ * no_of_previous_bookings_not_canceled and no_of_previous_cancellations
+ * no_of_children and avg_price_per_room
+ * no_of_adults and avg_price_per_room
+
+The pairs() plots all of these relationships which helps visualize and see the correlations
+
+From the cov(), I found that the strongest covariance values tell me that:
+
+ * lead_time and no_of_week_nights are positively and relatively strongly related
+ * lead_time and avg_price_per_room are negatively and very strongly related
+ * lead_time and no_of_previous_bookings_not_canceled are negatively and relatively strongly related
+
+Therefore, it seems that lead_time might be an important predictor
+
+### Plots and graphs
+
+The histogram shows that most rooms cost between $50 to $150, and there are many more rooms whose price is above that range than below.
+The plot built boxplots for every room type based on their average price, which shows that room type 7 has the biggest price range and also the highest median price out of all the room types. Some additional information from this plot is that room types 1 and 2 have close median prices, and room types 4 and 5 have similar median prices as well.
+```{r}
+hist(train$avg_price_per_room, main="Average room price Histogram", xlab="average price per room")
+plot(train$room_type_reserved, train$avg_price_per_room, col="wheat", main="Room type vs Average room price", xlab="room type", ylab="average price per room")
+```
+
+The booking status plot shows that the data is imbalanced since there are almost twice as many "not canceled" cases than there are "canceled" cases, which could mess up to models.
+The boxplot shows that generally, at larger lead times there are more canceled booking while when the lead time is smaller there are less canceled bookings. This means that there are more cancellations ahead of time rather than last minute.
+The conditional plot shows that there are less cancellations when a larger number of special requests is made.
+```{r}
+plot(train$booking_status)
+boxplot(train$lead_time~train$booking_status, col=c("red", "seagreen"), xlab="booking status", ylab="lead time")
+cdplot(train$no_of_special_requests, train$booking_status, col=c("snow", "gray"), xlab="Number of special requests", ylab="Booking status")
+```
+
+The two pie charts show that there are less cancellations being made by repeated guests rather than not repeated guests. This should be further investigated because the data could be imbalanced in regards to the amount of repeated and not repeated guests.
+```{r}
+rep_guest <- train$booking_status[train$repeated_guest==1]
+not_rep_guest <- train$booking_status[train$repeated_guest==0]
+
+lbls <- c("Canceled", "Not Canceled")
+pie(c(sum(rep_guest=="Canceled"), sum(rep_guest=="Not_Canceled")), labels=lbls, main="Repeated Guest Booking Status", col=c("wheat", "lightblue"))
+pie(c(sum(not_rep_guest=="Canceled"), sum(not_rep_guest=="Not_Canceled")), labels=lbls, main="Not Repeated Guest Booking Status", col=c("wheat", "lightblue"))
+```
+
+### Make the logistic regression model
+
+Build a logistic regression model using all predictors. I got rid of the room_type_reserved because it didn't seem like it would have much effect on the booking status.
+
+The summary shows a few things:
+
+ * The deviance residuals statistics give an idea of the loss function and a given point's contribution to the overall likelihood
+ * The coefficient estimates quantify the difference in the log odds of the target value (booking status). It seems most coefficient are good except no_of_children and no_of_previous_bookings_not_canceled.
+ * The null deviance measures the lack of fit of the model while considering only the intercept
+ * The residual deviance measures the lack of fit of the model while considering the entire model
+ * In this model, the residual deviance is much lower than the null deviance, which is what we want to see
+ * The AIC doesn't tell us much since it is mostly useful when comparing models
+```{r}
+train <- train[,-5]
+
+glm1 <- glm(booking_status~., data=train, family="binomial")
+summary(glm1)
+```
+
+### Build a naive Bayes model
+
+The output of the naive Bayes model shows the prior and likelihoods of the data.
+
+ * The prior for booking_status (probability of booking_status) is 0.328 canceled and 0.672 not canceled
+ * Since most of the data is continuous, the mean and standard deviation are outputted for the two classes (canceled/not canceled)
+ * For repeated_guest, a discrete data type, a breakdown by canceled/not canceled for each possible value of the attribute is outputted.
+   The probabilities of canceled are 99.87% for a not repeated guest and 0.13% for a repeated guest
+ * The no_of_adults is continuous, so the mean for canceling is 1.9 with standard deviation of 0.48, and the mean for not surviving is 1.8 with standard deviation of 0.53. The means are very close, which means that the number of adults alone doesn't tell us much.
+```{r}
+library(e1071)
+nb1 <- naiveBayes(booking_status~., data=train)
+nb1
+```
+
+### Predict and evaluate results
+
+For the naive Bayes, an accuracy and confusion matrix are generated. It seems that the nb1 model is accurate about 43% of the time, and the confusion matrix shows the following: 
+
+ * TP - true positive: 2369 bookings were canceled and were predicted as canceled
+ * FP - false positive: 4122 bookings were not canceled but were predicted as canceled
+ * FN - false negative: 9 booking were canceled but were predicted as not canceled
+ * TN - true negative: 755 bookings were not canceled and were predicted as not canceled
+```{r}
+p1 <- predict(nb1, newdata=test, type="class")
+accnb <- mean(p1==test$booking_status)
+print(paste("naive Bayes accuracy = ", accnb))
+
+confus_nb <- table(p1, test$booking_status)
+confus_nb
+```
+
+For the logistic regression model, the model is accurate 22% of the time.
+The confusion matrix shows that:
+
+ * TP - true positive: 1129 bookings were canceled and were predicted as canceled
+ * FP - false positive: 4380 bookings were not canceled but were predicted as canceled
+ * FN - false negative: 1249 booking were canceled but were predicted as not canceled
+ * TN - true negative: 497 bookings were not canceled and were predicted as not canceled
+```{r}
+probs <- predict(glm1, newdata=test, type="response")
+pred <- ifelse(probs>0.5, 1, 2)
+acc <- mean(pred==as.integer(test$booking_status))
+print(paste("glm accuracy = ", acc))
+
+confus_glm <- table(pred, as.integer(test$booking_status))
+confus_glm
+```
+
+### Compare results
+
+Using confusionMatrix() I get more metrics about each model. When comparing the models, it looks like:
+
+ * The naive Bayes model is twice as accurate and twice as sensitive (its true positive rate is twice as high) compared to the logistic regression model
+ * Both models have similar specificity (true negative rate), with the specificity of the nb model being slightly larger than that of the glm
+ * The Kappa metric is terrible for both models, with the np model having kappa=0.1047 which means there is poor agreement and the classification did a bit better than random values, while the glm model having kappa=-0.3165 which is very poor agreement and classification is worse than random
+
+This supports the results of the confusion matrices, which show that the naive Bayes model did a better job predicting the data.
+```{r}
+library(caret)
+# naive Bayes
+confusionMatrix(as.factor(as.integer(p1)), reference=as.factor(as.integer(test$booking_status)))
+# glm
+confusionMatrix(as.factor(pred), reference=as.factor(as.integer(test$booking_status)))
+```
+
+The MCC metric, which accounts for differences in class distribution unlike the accuracy metric, of each model show that:
+
+ * There is weak agreement between the predictions and actual values in the naive Bayes model
+ * There some disagreement between the predictions and actual values in the logistic regression model
+```{r}
+library(mltools)
+
+print(paste("nb mcc = ", mcc(as.integer(p1), as.integer(test$booking_status))))
+print(paste("glm mcc = ", mcc(pred, as.integer(test$booking_status))))
+```
+
+The ROC curve shows the trade-off between predicting true positives while avoiding false positives by plotting the TPR against the FPR. Here, the ROC curve show up much too quickly.
+The AUC metric is the area under the curve, where 0.5 means the classifier has no predictive value while 1 means the classifier is perfect. Here, the AUC value is 0.83, which is relatively good.
+```{r}
+library(ROCR)
+p3 <- predict(glm1, newdata=test, type="response")
+pr <- prediction(p3, test$booking_status)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+print(paste("auc = ", auc))
+```
+
+The naive Bayes did much better then the logistic regression model based on all of the above metrics. However, since the data is not balanced, that most likely affected the results in some way.
+A reason why the naive Bayes model performed better than the logistic regression model could be due to the naive assumption that naive Bayes makes that all of the predictors are independent and because of the size of the training data set.
+
+### Logistic regression vs naive Bayes
+
+**Logistic Regression**: Despite its misleading name, logistic regression is used for classification, not regression. Logistic regression is a still considered a linear model because it is linear in the parameters; the sigmoid function then shapes the output to be in the range [0,1] for probabilities.
+Some strengths of logistic regression are:
+
+ * It separates classes well given that the classes are linearly separable
+ * It is computationally inexpensive
+ * It has a nice probabilistic output
+
+Some weaknesses are that it is prone to underfitting due to high bias and because it is not flexible enough to capture complex non-linear decision boundaries.
+
+**Naive Bayes**: it is a dependable classifier often used as a baseline for more sophisticated algorithms that are expected to outperform it.
+Some strengths of naive Bayes are:
+
+ * It works best with small data sets
+ * It is easy to implement and interpret
+ * It can handle high dimensions well
+
+Some weaknesses are:
+
+ * It will likely get outperformed by other classifiers for larger data sets
+ * Assumes that predictors are independent
+ * It has high bias and therefore is prone to underfitting
+ * Makes guesses for test data values that didn't occur in the training data
+
+### Classification metrics
+
+**Accuracy**: the most common metric to evaluate results in classification. Tells how accurate the model is in the range [0,1], with values closer to 1 being better.
+
+ * accuracy = (number of correct predictions) / (total number of test observations)
+ * Benefit - gives a quick glance into the accuracy of the model
+ * Drawback - doesn't account for differences in class distribution or predictions by chance
+
+**Sensitivity**: measures the true positive rate, and range [0,1] with values closer to 1 being better
+
+ * Benefit - help quantify the extent to which a given class was misclassified
+ * Drawback - more likely to be affected by imbalanced data sets, can be affected by thresholds
+
+**Specificity**: measures the true negative rate, and range [0,1] with values closer to 1 being better
+
+ * Benefit - help quantify the extent to which a given class was misclassified, less likely to be affected by imbalanced data sets
+ * Drawback - can be affected by thresholds
+
+**Kappa**: attempts to adjust accuracy by accounting for the possibility of a correct prediction by chance alone. It is often used to quantify agreement between two annotators of data.
+
+ * Benefit - takes into account imbalance in class distribution, takes chance into consideration
+ * Drawback - more complex to interpret and the same model will give different kappa value depending on how balanced the test data is.
+
+**ROC Curve**: shows the trade-off between predicting true positives while avoiding false positives.
+
+ * Benefit - shows sensitivity vs specificity at all possible thresholds
+ * Drawback - dependent on the order of probabilities, can't be used to compare models to one another
+
+**AUC**: the area under the ROC curve. Its values range [0.5, 1] (for a classifier with no predictive value to a prefect classifier).
+
+ * Benefit - can be used to compare different models
+ * Drawback - ignores the predictive probability values and goodness-of-fit of the model
+
+**MCC**: accounts for differences in class distribution unlike accuracy; ranges [-1,1].
+
+ * Benefit - takes class distribution differences into account, useful when classes are imbalanced
+ * Drawback - for binary classification only
+
+
+#### References:
+
+Mazidi, Karen. *Machine Learning Handbook Using R and Python*. 2nd ed., 2020.
