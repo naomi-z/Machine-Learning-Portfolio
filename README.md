@@ -8,3 +8,7 @@ Table of Contents
 3. Linear Models-
     - Linear regression: [Regression pdf](https://github.com/naomi-z/Portfolio/blob/c1cc6a6168baceb087bc2429d39008c18fe37156/Regression.pdf) and [code](https://github.com/naomi-z/Portfolio/blob/4e2cb0a88eac0287c0d9da78f971b493202e436c/Regression.Rmd)
     - Logistic regression: [Classification pdf](https://github.com/naomi-z/Portfolio/blob/c1cc6a6168baceb087bc2429d39008c18fe37156/Classification.pdf) and [code](https://github.com/naomi-z/Portfolio/blob/4e2cb0a88eac0287c0d9da78f971b493202e436c/Classification.Rmd)
+4. ML Algorithms from Scratch in C++-
+    - Logistic Regression: [logistic regression program](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/LogFromScratch.cpp)
+    - Naive Bayes: [naive Bayes program](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/NaiveBayesFromScratch.cpp)
+    - Reflection: [reflection](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/ML_Algorithms_From_Scratch.pdf)
