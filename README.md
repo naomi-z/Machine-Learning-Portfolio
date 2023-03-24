@@ -12,3 +12,4 @@ Table of Contents
     - Logistic Regression: [logistic regression program](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/LogFromScratch.cpp)
     - Naive Bayes: [naive Bayes program](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/NaiveBayesFromScratch.cpp)
     - Reflection: [reflection](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/ML_Algorithms_From_Scratch.pdf)
+5. Searching for Similarity - [Similarity pdf](https://github.com/naomi-z/Portfolio/blob/cf2a71c01c4ab84bdd65c29e3ef54cb98bf65b92/Similarity.pdf) and [notebook code](https://github.com/naomi-z/Portfolio/blob/cf2a71c01c4ab84bdd65c29e3ef54cb98bf65b92/Similarity.Rmd)
