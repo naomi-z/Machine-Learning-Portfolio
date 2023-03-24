@@ -1,0 +1,358 @@
+---
+title: "Regression"
+author: "Naomi Zilber"
+date: "25 March 2023"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+### Overview
+
+In this notebook, I perform linear, kNN, and decision tree regression models on the data set.
+The data set used in this notebook is from [this link.](https://www.kaggle.com/datasets/syuzai/perth-house-prices)
+
+### Load data
+
+Read in the data of house_pricing
+
+```{r}
+df <- read.csv("house_pricing.csv", header=TRUE)
+str(df)
+```
+
+### Data Cleaning
+
+Convert garage and build_year to be integers and get rid of features that will not be used for the regression models.
+
+```{r}
+df <- df[,c(-1,-2,-11,-13,-14,-15,-16,-17)]
+df$GARAGE <- as.integer(df$GARAGE)
+df$BUILD_YEAR <- as.integer(df$BUILD_YEAR)
+str(df)
+```
+
+### Handle missing values
+
+Since school rank has many NAs, I decided to simply get rid of it.
+For the garage numbers, I assumed that an NA meant no garage space, so I replaced all NAs with zeroes.
+Lastly, for the build_year, I decided to replace all NAs with the mean of all of the build_year values.
+
+```{r}
+sapply(df, function(x) sum(is.na(x)==TRUE))
+```
+
+```{r}
+df <- df[,-11]
+df$GARAGE[is.na(df$GARAGE)] <- 0
+df$BUILD_YEAR[is.na(df$BUILD_YEAR)] <- mean(df$BUILD_YEAR, na.rm=TRUE)
+str(df)
+```
+
+#### Getting Rid of Outliers
+
+It looks like there are two garage numbers that are most likely outliers.
+A garage size of 99 and 50 seems extremely unrealistic, so I removed them.
+I also removed other potential outliers, including an observation with 16 bathrooms and observations with land area of more than 600,000 squared meters.
+Removing these observations could be harmful since there is no way of knowing whether they really are outliers, but I assumed that they were outliers and therefore removed them so that they won't skew my models.
+
+```{r}
+range(df$GARAGE)
+df[df$GARAGE>40,]
+df <- df[df$GARAGE<50,]
+
+range(df$BATHROOMS)
+df[df$BATHROOMS>10,]
+df <- df[df$BATHROOMS<10,]
+
+range(df$LAND_AREA)
+df[df$LAND_AREA>600000,]
+df <- df[df$LAND_AREA<600000,]
+```
+
+### Divide into train and test data
+
+Divide the data to 80% train data and 20% test data
+
+```{r}
+set.seed(1234)
+i <- sample(1:nrow(df), 0.8*nrow(df), replace=FALSE)
+train <- df[i,]
+test <- df[-i,]
+```
+
+### Data Exploration
+
+Explore data statistically and graphically.
+I look at the first 4 observations to get an idea of what my data looks like.
+I find the range of building year of the houses in the data set, and find the average price of the houses.
+Lastly, I look at the correlations between all of the features in the data set.
+
+```{r}
+head(train, n=4)
+range(train$BUILD_YEAR)
+mean(train$PRICE)
+cor(train)
+```
+
+The first plot returns a graph that shows the price vs the number of bedrooms in the house, which shows that surprisingly it doesn't seem like in price and number of bedrooms have a high correlation.
+The density plot represents the price.
+The boxplot shows the range of the price of houses.
+It looks like R believes that prices above around 1400000 are outliers.
+The next plot shows price vs floor area, which shows that these do seems to have a relationship where as floor area increases so does the price.
+Lastly, the histogram shows the distribution of number of garages.
+It appears like most houses don't have many garages.
+
+```{r}
+plot(train$PRICE, train$BEDROOMS, xlab="Price", ylab="Number of bedrooms")
+
+d <- density(train$PRICE, na.rm=TRUE)
+plot(d, main="Kernel Density Plot for Price", xlab="Price")
+polygon(d, col="wheat", border="slategray")
+
+boxplot(train$PRICE, col="purple", horizontal=TRUE, xlab="Price")
+plot(train$PRICE, train$FLOOR_AREA, xlab="Price", ylab="Floor Area (m^2)")
+hist(train$GARAGE, main="Garage", xlab="Number of Garages")
+```
+
+The first plot shows price vs distance to central business district, which show that the smaller the distance to the cbd, the more expensive the house.
+The second plot shows the number of garages vs the distance to the nearest train station and the third plot shows the build year of the house vs the price of the house.
+These plots let you get a general idea of how the data looks like.
+
+```{r}
+plot(train$PRICE, train$CBD_DIST, xlab="Price", ylab="Distance to Central Business District")
+plot(train$GARAGE, train$NEAREST_STN_DIST, col="turquoise", xlab="Number of garages", ylab="Distance to nearest train station")
+plot(train$BUILD_YEAR, train$PRICE, pch='+', xlab="Build year", ylab="Price")
+```
+
+The strongest relationships seem to be between price and floor_area, build_year, and cbd_dist.
+Overall it seems like there are mainly weak relationships between the price and the rest of the features.
+
+### Linear Regression Model
+
+Build a linear regression model to predict the price of the house from all of the features, and print a summary of the model.
+
+The summary statistics show that the model has an R-squared of 0.4979 which is realtively good, meaning that the variance in the model is explained relatively well by the predictors.
+The RSE is high as 250400, which means that the model is relatively far off from the data.
+Lastly, the F-statistics is much larger than 1 with a small associated p-value, which indicates that R is relatively confident in the model.
+
+```{r}
+lm1 <- lm(PRICE~., data=train)
+summary(lm1)
+```
+
+### Predict
+
+Correlation is very good but MSE looks extremely terrible
+
+```{r}
+pred1 <- predict(lm1, newdata=test)
+cor_lm <- cor(pred1, test$PRICE)
+mse_lm <- mean((pred1 - test$PRICE)^2)
+
+print(paste("cor = ", cor_lm))
+print(paste("mse = ", mse_lm))
+```
+
+#### Plot residuals
+
+The 4 residual plots tell us the following:
+
+-   Residuals vs Fitted - the residuals seem to have a slight non-linear pattern of a convex parabola which the linear model didn't entirely capture
+-   Normal Q-Q - the residuals seem to not follow the dashed line very well, so the residuals are not very well normally distributed
+-   Scale-Location - the line is not horizontal at all and it doesn't look like the residuals are equally distributed around the line
+-   Residuals vs Leverage - it seems that there are a few leverage points that are influencing the regression line
+
+```{r}
+par(mfrow=c(2,2))
+plot(lm1)
+```
+
+### KNN Model
+
+Before I can perform kNN, I need to find the best k.
+
+#### Finding the Best k
+
+Based on the results, the best k value is 5.
+
+```{r}
+library(caret)
+
+cor_k <- rep(0, 7)
+mse_k <- rep(0, 7)
+i <- 1
+for (k in seq(1, 7, 2)){
+  fit_k <- knnreg(train[,2:10], train[,1], k=k)
+  pred_k <- predict(fit_k, test[,2:10])
+  cor_k[i] <- cor(pred_k, test$PRICE)
+  mse_k[i] <- mean((pred_k - test$PRICE)^2)
+  print(paste("k=", k, cor_k[i], mse_k[i]))
+  i <- i + 1
+}
+```
+
+Build a kNN regression model to predict the price of the house from all of the features.
+
+```{r}
+fit <- knnreg(train[,2:10], train[,1], k=5)
+```
+
+### Predict for Non-Scaled kNN
+
+Correlation is good but mse is bad.
+
+```{r}
+pred2 <- predict(fit, test[,2:10])
+cor_knn <- cor(pred2, test$PRICE)
+mse_knn <- mean((pred2 - test$PRICE)^2)
+
+print(paste("cor = ", cor_knn))
+print(paste("mse = ", mse_knn))
+```
+
+### Scaling
+
+Build a kNN regression model like before but with scaled data.
+
+Scale the data.
+
+```{r}
+train_scaled <- train[,2:10]
+means <- sapply(train_scaled, mean)
+stdvs <- sapply(train_scaled, sd)
+train_scaled <- scale(train_scaled, center=means, scale=stdvs)
+test_scaled <- scale(test[,2:10], center=means, scale=stdvs)
+```
+
+### Predict for Scaled kNN
+
+The correlation and mse values are better than when the data was not scaled, as expected.
+
+```{r}
+fit2 <- knnreg(train_scaled, train$PRICE, k=5)
+predictions <- predict(fit2, test_scaled)
+cor_knn2 <- cor(predictions, test$PRICE)
+mse_knn2 <- mean((predictions - test$PRICE)^2)
+
+print(paste("cor = ", cor_knn2))
+print(paste("mse = ", mse_knn2))
+```
+
+### Decision Tree Regression Model
+
+Build a decision tree regression model to predict the price of the house from all of the features, and print a summary of the model. The summary shows that the tree used floor_area, cbd_dist, and build_year as the decisive parameters, and that the tree has 8 terminal nodes.
+
+```{r}
+library(tree)
+library(MASS)
+
+tree1 <- tree(PRICE~., data=train)
+summary(tree1)
+```
+
+Plot the tree
+
+```{r}
+plot(tree1)
+text(tree1, cex=0.5, pretty=0)
+```
+
+### Predict
+
+The correlation is relatively good but the mse is extremely bad.
+
+```{r}
+pred3 <- predict(tree1, newdata=test)
+cor_tree <- cor(pred3, test$PRICE)
+mse_tree <- mean((pred3 - test$PRICE)^2)
+
+print(paste("cor = ", cor_tree))
+print(paste("mse = ", mse_tree))
+```
+
+### Tree Pruning
+
+There is no clear curve in this plot, but it looks like the best choice would be to prune the tree to 5 or 6 terminal nodes.
+
+```{r}
+cv_tree <- cv.tree(tree1)
+plot(cv_tree$size, cv_tree$dev, type='b')
+```
+
+The tree is pruned to 6 terminal nodes.
+
+```{r}
+tree_pruned <- prune.tree(tree1, best=6)
+plot(tree_pruned)
+text(tree_pruned, cex=0.5, pretty=0)
+```
+
+#### Predict on the Pruned Tree
+
+It looks like the correlation and mse actually got worse then before pruning the tree.
+Therefore, in this case, pruning the tree didn't improve the results, but the tree is now simpler and easier to interpret.
+
+```{r}
+pred_pruned <- predict(tree_pruned, newdata=test)
+cor_pruned <- cor(pred_pruned, test$PRICE)
+mse_pruned <- mean((pred_pruned-test$PRICE)^2)
+
+print(paste("cor = ", cor_pruned))
+print(paste("mse = ", mse_pruned))
+```
+
+### Evaluation
+
+The results are as follows:
+
+-   Linear regression - correlation = 0.7252 and mse = 63565285672.2517
+-   Non-scaled kNN regression - correlation = 0.7310 and mse = 62341026701.0593
+-   Scaled kNN regression - correlation = 0.7658 and mse = 55517099799.4977
+-   Decision tree regression - correlation = 0.6866 and mse = 70770862278.3649
+
+Based on these results, it looks like the scaled kNN regression model performed the best out of all of the models since it got the highest correlation and the lowest MSE value.
+After the scaled kNN regression model, the non-scaled kNN regression model performed the best, for the same reasons as before, though the linear regression model has a very close correlation to it but its mse is much higher.
+Therefore, the scaled kNN model performed best, with the non-scaled and linear models are close as second a third best models, while the decision tree model did the worst out of them all.
+
+#### Models Description
+
+**Linear regression** is a supervised regression technique in which the target is a real number variable and the predictors could be any combination of quantitative or qualitative variables.
+Some strengths of linear regression are:
+
+-   It is a relatively simple and intuitive algorithm
+-   It works well if the data has a linear pattern
+-   It has low variance
+
+Some weaknesses are the fact that linear regression has a high bias because it assumes that there is a linear relationship between the target and the predictors (that the data has a linear shape), and thereby tend to underfit the data.
+
+**kNN regression** is a a supervised regression technique but it doesn't form a model of the input data, it instead stores all of the training observations in memory and then compares any new observation to existing ones to evaluate it and find the closest k neighbors.
+Some strengths of kNN regression are:
+
+-   It doesn't assume the shape of the data
+-   It performs well in low dimensions
+-   It can be used for both classification and regression
+
+Some weaknesses are:
+
+-   It can't handle high dimensions
+-   K must be chosen
+-   The data needs to be scaled for best performance
+-   It is difficult to interpret
+
+**Decision trees** have an algorithm that recursively split the input observations into partitions until the observations in a given partition are uniform, and the algorithm is greedy and doesn't go back and reconsider earlier splits.
+Performance wise, decision trees aren't the best, but they have the advantage of being highly interpretable and give insight into the data.
+Additionally, decision trees are sensitive to the distribution of predictors so slightly different data can result in very different trees.
+
+### Results Explanation
+
+Based on the information above, it can be concluded that the results acquired happened for the following reasons:
+
+-   The linear regression model most likely outperformed the decision tree because the data might have a linear trend rather then a not linear and complex relationship between the predictors and the target.
+-   The scaled kNN regression obviously outperformed the non-scaled kNN regression because scaling improves the results for this algorithm
+-   The scaled kNN regression most likely outperformed the decision tree because decision trees are sensitive to the distribution of predictors, and therefore that could have made the decision tree perform worse.
+-   The scaled and non-scaled kNN regression both outperformed the linear regression model because they didn't assume the shape of the data while the linear regression model assumed that the data has a linear pattern, which might have not been the case.
