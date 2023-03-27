@@ -1,0 +1,200 @@
+---
+title: "Ensemble Methods"
+author: "Naomi Zilber"
+date: "1 April 2023"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+### Overview
+
+In this notebook, I perform ensemble learning models on the data set, including random forest, bagging, Adaboost, and XGBoost.
+The data set used in this notebook is from [this link.](https://www.kaggle.com/datasets/ahsan81/hotel-reservations-classification-dataset)
+
+### Load data
+
+Read in the data of hotel reservations
+
+```{r}
+df <- read.csv("Hotel_Reservations.csv", header=TRUE)
+str(df)
+```
+
+### Data cleaning
+
+Got rid of features that I don't think will affect the target value (booking status), and converted room_type_reserved, booking_status, and repeated_guest into factors.
+
+```{r}
+df <- df[,c(-1,-6,-7,-10,-11,-12,-13)]
+df$room_type_reserved <- as.factor(df$room_type_reserved)
+df$booking_status <- as.factor(df$booking_status)
+df$repeated_guest <- as.factor(df$repeated_guest)
+str(df)
+```
+
+### Handle missing values
+
+There are no NAs to handle in this data set
+
+```{r}
+sapply(df, function(x) sum(is.na(x)==TRUE))
+```
+
+### Divide into train and test data
+
+Divide the data to 80% train data and 20% test data
+
+```{r}
+set.seed(1234)
+i <- sample(1:nrow(df), 0.8*nrow(df), replace=FALSE)
+train <- df[i,]
+test <- df[-i,]
+```
+
+### Random Forest
+
+Create a random forest model.
+It took the algorithm roughly 35 seconds to run.
+
+```{r}
+library(tictoc)
+library(randomForest)
+set.seed(1234)
+tic("random forest")
+rf <- randomForest(booking_status~., data=train, importance=TRUE)
+toc()
+rf
+```
+
+### Predict on the Random Forest
+
+The accuracy is very good.
+The mcc is also relatively good, which shows that there is relatively strong agreement between the predictions and actual values in the random forest model.
+
+```{r}
+library(mltools)
+pred_rf <- predict(rf, newdata=test)
+acc_rf <- mean(pred_rf==test$booking_status)
+mcc_rf <- mcc(pred_rf, test$booking_status)
+
+print(paste("accuracy =", acc_rf))
+print(paste("mcc =", mcc_rf))
+
+confus_rf <- table(pred_rf, test$booking_status)
+confus_rf
+```
+
+### Bagging
+
+I set mtry to 11 since there are 11 predictors, which results in bagging.
+It took the algorithm roughly 28 seconds to run, which is faster than the random forest algorithm.
+
+```{r}
+tic("bagging")
+bag <- randomForest(booking_status~., data=train, mtry=11)
+toc()
+bag
+```
+
+### Predict on Bagging Model
+
+Results are slightly better for bagging than the random forest for both the accuracy and mcc.
+
+```{r}
+pred_bg <- predict(bag, newdata=test)
+acc_bg <- mean(pred_bg==test$booking_status)
+mcc_bg <- mcc(pred_bg, test$booking_status)
+
+print(paste("accuracy =", acc_bg))
+print(paste("mcc =", mcc_bg))
+
+confus_bg <- table(pred_bg, test$booking_status)
+confus_bg
+```
+
+### Adaboost
+
+Boost using the adabag package and create a model.
+It took the algorithm roughly 25 seconds to run, which is a bit faster than the bagging algorithm, but 10 seconds faster than the random forest algorithm (a big improvement).
+
+In the boosting() function, the boos=TRUE argument indicates that a bootstrap sample of the training data should be used, the mfinal argument indicates the number of iterations in boosting, and the coeflearn argument control the algorithm selected.
+
+```{r}
+library(adabag)
+tic("adaboost")
+adab1 <- boosting(booking_status~., data=train, boos=TRUE, mfinal=20, coeflearn='Breiman')
+toc()
+summary(adab1)
+```
+
+### Predict on the Adaboost Model
+
+The accuracy and mcc are a bit lower than those of the random forest and bagging models.
+
+```{r}
+pred_adabag <- predict(adab1, newdata=test, type="response")
+acc_adabag <- mean(pred_adabag$class==test$booking_status)
+mcc_adabag <- mcc(factor(pred_adabag$class), test$booking_status)
+
+print(paste("accuracy =", acc_adabag))
+print(paste("mcc =", mcc_adabag))
+```
+
+### XGBoost
+
+Convert data into numeric matrices since the data needs to be processed before xgboost can be used.
+
+```{r}
+train_label <- ifelse(as.integer(train$booking_status)==2, 1, 0)
+train_matrix <- data.matrix(train[, -12])
+
+test_label <- ifelse(as.integer(test$booking_status)==2, 1, 0)
+test_matrix <- data.matrix(test[, -12])
+```
+
+### Create the Model and Predict using XGBoost
+
+Create the model using xgboost package.
+It took the algorithm roughly 2 seconds to run, which is by far the fastest out of all the other algorithms used in this notebook.
+
+The accuracy and mcc are second best to the bagging model, though they are very close to the accuracy and mcc of the random forest and bagging models, so the xgboost model didn't under/outperform them by much at all.
+
+The nrounds argument specifies the number of decision trees in the final mode.
+
+```{r}
+require(xgboost)
+
+tic("xgboost")
+model <- xgboost(data=train_matrix, label=train_label, nrounds=100, objective='binary:logistic')
+toc()
+
+probs <- predict(model, test_matrix)
+pred_xg <- ifelse(probs>0.5, 1, 0)
+acc_xg <- mean(pred_xg==test_label)
+mcc_xg <- mcc(pred_xg, test_label)
+
+print(paste("accuracy =", acc_xg))
+print(paste("mcc =", mcc_xg))
+```
+
+### Evaluation
+
+Based on the results, bagging had the highest accuracy and mcc, followed by XGBoost, random forest, and Adaboost
+Overall, the bagging, XGBoost, and random forest algorithms all had very close accuracy and mcc values, with only Adaboost lagging behind, relatively speaking.
+
+When taking the speed of the algorithm into consideration, XGBoost was the fastest by far, followed by Adaboost and bagging closely after, and random forest being the slowest.
+This shows that even though bagging had the highest accuracy, it was much slower than XGBoost, whose accuracy was extremely close to that of the bagging model and the random forest model, so XGBoost would be much preferred over these algorithms overall.
+Bagging and Adaboost had similar run times, but Adaboost had a lower accuracy compared to bagging, so Adaboost being slightly faster than bagging seems to have cost it a bit of accuracy.
+
+Overall, it seems like XGBoost performed the best out of all of these algorithms when both run time and accuracy are taken into account because the algorithm's speed barely affected its accuracy, and its speed was substantially better than any of the other algorithms.
+
+#### References
+
+Mazidi, Karen.
+*Machine Learning Handbook Using R and Python*.
+2nd ed., 2020.
