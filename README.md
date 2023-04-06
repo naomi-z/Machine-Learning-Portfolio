@@ -1,4 +1,4 @@
-# Portfolio
+# Machine Learning Portfolio
 ## author: Naomi Zilber
 This is a machine learning portfolio
 
