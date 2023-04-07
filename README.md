@@ -14,3 +14,4 @@ Table of Contents
     - Reflection: [reflection](https://github.com/naomi-z/Portfolio/blob/28a20bee60e3b0a2ca075c9be5050595380d1c1b/ML_Algorithms_From_Scratch.pdf)
 5. Searching for Similarity - [Similarity pdf](https://github.com/naomi-z/Portfolio/blob/cf2a71c01c4ab84bdd65c29e3ef54cb98bf65b92/Similarity.pdf) and [notebook code](https://github.com/naomi-z/Portfolio/blob/cf2a71c01c4ab84bdd65c29e3ef54cb98bf65b92/Similarity.Rmd)
 5. Ensemble Methods- [ensemble methods pdf](https://github.com/naomi-z/Portfolio/blob/19e398aa96766e0b69bbcc2e9c640d713f29d46f/EnsembleMethods.pdf) and [code](https://github.com/naomi-z/Portfolio/blob/19e398aa96766e0b69bbcc2e9c640d713f29d46f/EnsembleMethods.Rmd)
+6. ML with sklearn- [pdf](https://github.com/naomi-z/Machine-Learning-Portfolio/blob/5b9b8990756701fc934947f19653f056e804613a/PythonML%20Colaboratory.pdf) and [code](https://github.com/naomi-z/Machine-Learning-Portfolio/blob/5b9b8990756701fc934947f19653f056e804613a/PythonML.ipynb)
